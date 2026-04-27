@@ -5,10 +5,10 @@ import pandas as pd
 from dateutil import parser
 from datetime import datetime
 
-db = pymysql.connect(host='localhost', user='root', password='123456', port=3306, db='stock_data') # 自己的数据库参数
+db = pymysql.connect(host='localhost', user='root', password='123456', port=3306, db='stock_data')
 # 创建数据库的游标
 cursor = db.cursor()
-ts.set_token('用户token')
+ts.set_token('3f3c696116d8dbb7f9dbd53e598198e41c142216da03a9fc7ad56f89')
 pro = ts.pro_api()
 
 class ConditionArrangement:
@@ -51,27 +51,20 @@ class ConditionArrangement:
         max_date = max(parser.parse(d) for d in date)
         max_date = max_date.strftime('%Y%m%d')
 
-        # 另一种选取最大日期方法
+        # 另一种选取最大日期方法，在下面的is_in_factors_value中有使用。需要在数据库中按日期升序排序order by trade_date asc
         # max_date = db_date[-1][0]
         print(f"数据库中最小的日期是：{min_date}")
         print(f'数据库中最大的日期是：{max_date}')
-        # 2025.7.18today日期主要是为根据当前时间更新数据
-        '''today = datetime.now().strftime('%Y%m%d')
-        today = datetime.strptime(today, '%Y%m%d')  # 2025.6.21有点问题
-        print(f'今日日期是{today}')
-        self.today = today'''
-
 
         if int(self.start_date) < int(min_date):
             trade_date = self.date_translate(self.start_date, min_date)
-            # 2025.6.21代码写到这
-            print('股票数据进行本地化数据，缺少起始日期数据')
+            print(f'股票数据进行本地化数据，缺少起始日期数据。数据库最小日期为：{min_date}')
             for date in trade_date:
                 one_date = date
                 self.Sa1.daily_basic_saver(one_date, ts_list=ts_list)
 
         elif int(self.end_date) > int(max_date):
-            print('股票数据进行本地化数据，缺少结束日期数据')
+            print(f'股票数据进行本地化数据，缺少结束日期数据。数据库最大日期为：{max_date}')
             trade_date = self.date_translate(max_date, self.end_date)
             for date in trade_date:
                 one_date = date
@@ -97,11 +90,11 @@ class ConditionArrangement:
         max_date = db_data[-1][0]
 
         if self.start_date < min_date:
-            print('因子值数据进行本地化')
+            print(f'因子值数据进行本地化。数据库最小日期为：{min_date}')
             return False
 
         elif self.end_date > max_date:
-            print('因子值数据进行本地化')
+            print(f'因子值数据进行本地化。 数据库最大日期为：{max_date}')
             return False
         else:
             return True

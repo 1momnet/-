@@ -9,7 +9,7 @@ from datetime import datetime
 db = pymysql.connect(host='localhost', user='root', password='123456', port=3306, db='stock_data')
 # 创建数据库的游标
 cursor = db.cursor()
-ts.set_token('用户token')
+ts.set_token('3f3c696116d8dbb7f9dbd53e598198e41c142216da03a9fc7ad56f89')
 pro = ts.pro_api()
 
 class StockChoice:
@@ -50,8 +50,6 @@ class StockChoice:
             list_date = int(current_year) - int(df1['list_date'].loc[0][:4]) # 计算上市时间
             name = df1['name'].loc[0] # 剔除ST股票
             # 剔除财务数据异常的公司，如资产负债率大于等于1
-            # 第二个报错原因：2024年12月31日的财务数据还没发布。解决办法：先用上一个报告期9月30日的财务报告。
-            # 发现问题，财务报告在期末，不能起到预测作用，需要使用上一期的财务报告
             df2 = pro.query('fina_indicator', ts_code=ts_code, start_date=self.trade_date[0], end_date=self.trade_date[-1])
             if df2.empty:
                 print(f"No financial data for {ts_code}")
@@ -60,7 +58,6 @@ class StockChoice:
             if industry not in ['银行', '保险', '证券']:
                 # 剔除上市不满一年的公司
                 if list_date > 1:
-                    # print(list_date)
                     if 'ST' not in name:
                         if debt_to_assets < 100:
                             j += 1
@@ -169,18 +166,17 @@ class StockChoice:
         return smb, hml
 
     # 三因子2：使用在线数据 2025.7.17后续可以改成saver
+    # 2026.04.26: 目前没有计划
 
     # 计算多个日期的SMB和HML
     def calculate_factors_for_dates(self):
-        # 判断数据是否被存储
         results = []
         for date in self.trade_date:
             one_date = date
             smb, hml = self.calculate_three_factor_1(one_date)
             results.append({'date': date, 'SMB': smb, 'HML': hml})
-            # print(results)
         sml_hml = pd.DataFrame(results)
-        sml_hml = sml_hml.set_index('date')  # 2025.7.14目前的情况是这两行代码没用, 2025.7.15恢复为原来的作用
+        sml_hml = sml_hml.set_index('date')
         return sml_hml
 
     def three_factors(self):
@@ -189,7 +185,6 @@ class StockChoice:
         end_date = self.trade_date[-1]
         print(start_date)
         print(end_date)
-        # 2025.7.17没有先运行数据存储模块导致下面的数据库访问失败。解决方案1：另外新建一个saver类来专门存储数据
         # 因子值计算
         smb_hml = self.calculate_factors_for_dates()
         for code in self.ts_list:
@@ -228,14 +223,6 @@ class StockChoice:
                                   adj='qfq').set_index('trade_date')['pct_chg']
         market_return.name = 'market_return'
 
-        '''# 将股票收益率和市场指数收益率合并到一个DataFrame中
-        data = pd.concat([stock_return_data, market_return], axis=1)
-        data = data.dropna()
-        # 计算超额收益率
-        # 排除市场收益率列
-        stock_return_data_only = data.drop('market_return', axis=1)
-        alpha = stock_return_data_only.sub(data['market_return'], axis=0)'''
-
         Rmt = pd.DataFrame()
         # 市场风险溢酬因子(Rmt)
         # rate_free为3月期的国债利率
@@ -256,16 +243,12 @@ class StockChoice:
         factors = pd.DataFrame(raw_data, columns=['trade_date', 'Rm_Rf', 'SMB', 'HML'])
         factors.set_index('trade_date', inplace=True)
 
-        # rate_free_series = pd.Series([rate_free] * len(factors), name='rate_free', index=factors.index)
-        # factors = pd.concat([rate_free_series, factors], axis=1)
-        # print(factors)
         # 确保索引对齐
         common_index = stock_return_data.index.intersection(factors.index)
         stock_return_data = stock_return_data.loc[common_index]
         factors = factors.loc[common_index]
         results = {}
 
-        # 2025.1.23感觉有点问题stock_return_data.columns
         for stock in stock_return_data.columns:
             stock_returns = stock_return_data[stock] - rate_free # 被解释变量：股票盈利
             # print('stock', stock)
@@ -275,7 +258,6 @@ class StockChoice:
                 continue
 
             X = sm.add_constant(factors)
-            # 2025.7.15回归出现问题
             model = sm.OLS(stock_returns, X).fit()
             results[stock] = model.params
 
@@ -293,46 +275,4 @@ class StockChoice:
 
         print('选取股票:{}, 预期收益率:{}\n'.format('\n'.join(map(str, self.top_stocks)), '\n'.join(map(str, self.expected_return))))
     # 2025.7.11还没考虑到数据不在数据库的情况
-
-
-
-def main_backtrade(top_stocks, qd_object, q_strategy, trade_back_start_date, tb_end_date):
-    stock_profit_ratios = {}
-
-    for i in top_stocks:
-        stock = i
-        # start_date_f = '20250101'
-        # today = datetime.now().strftime('%Y%m%d')
-        # end_date_f = today
-
-        # 实例化
-        df = qd_object.acquire_data(stock, start_date=trade_back_start_date, end_date=tb_end_date)
-        # 实例化 cerebro
-        cerebro = bt.Cerebro()
-        # 添加数据进cerebro
-        data = bt.feeds.PandasData(dataname=df)
-        cerebro.adddata(data)
-        # 设置本金与佣金
-        cerebro.broker.setcash(100000)
-        cerebro.broker.setcommission(commission=0.0005)
-        # 添加交易策略
-        print(i)
-        cerebro.addstrategy(q_strategy)
-        cerebro.addobserver(bt.observers.DrawDown)
-        start_value = cerebro.broker.getvalue()
-        print('初始资金: {:.2f}'.format(start_value))
-        cerebro.run()
-        end_value = cerebro.broker.getvalue()
-        print('最终资金: %.2f' % end_value)
-        profit_ratio = '{:.2f}%'.format((int(end_value) - start_value) / start_value * 100)
-        print('投资收益率: {}\n\n\n'.format(profit_ratio))
-        stock_profit_ratios[i] = profit_ratio
-
-    print(stock_profit_ratios)
-    return stock_profit_ratios
-
-        # 可视化回测结果
-        # cerebro.plot()
-
-
 

@@ -5,7 +5,7 @@ import pandas as pd
 db = pymysql.connect(host='localhost', user='root', password='123456', port=3306, db='stock_data')
 # 创建数据库的游标
 cursor = db.cursor()
-ts.set_token('用户token')
+ts.set_token('3f3c696116d8dbb7f9dbd53e598198e41c142216da03a9fc7ad56f89')
 pro = ts.pro_api()
 
 class Saver:

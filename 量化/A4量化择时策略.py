@@ -2,7 +2,7 @@ import tushare as ts
 import backtrader as bt
 import pandas as pd
 
-ts.set_token('用户token')
+ts.set_token('3f3c696116d8dbb7f9dbd53e598198e41c142216da03a9fc7ad56f89')
 pro = ts.pro_api()
 
 class BollStrategy(bt.Strategy):
@@ -79,3 +79,41 @@ def q_strategy_choice(q_strategy):
         '布林线': BollStrategy,
     }
     return q_method_map.get(q_strategy)
+
+
+def main_backtrade(top_stocks, qd_object, q_strategy, trade_back_start_date, tb_end_date):
+    stock_profit_ratios = {}
+
+    for i in top_stocks:
+        stock = i
+        # today = datetime.now().strftime('%Y%m%d')
+        # end_date_f = today
+
+        # 实例化
+        df = qd_object.acquire_data(stock, start_date=trade_back_start_date, end_date=tb_end_date)
+        # 实例化 cerebro
+        cerebro = bt.Cerebro()
+        # 添加数据进cerebro
+        data = bt.feeds.PandasData(dataname=df)
+        cerebro.adddata(data)
+        # 设置本金与佣金
+        cerebro.broker.setcash(100000)
+        cerebro.broker.setcommission(commission=0.0005)
+        # 添加交易策略
+        print(i)
+        cerebro.addstrategy(q_strategy)
+        cerebro.addobserver(bt.observers.DrawDown)
+        start_value = cerebro.broker.getvalue()
+        print('初始资金: {:.2f}'.format(start_value))
+        cerebro.run()
+        end_value = cerebro.broker.getvalue()
+        print('最终资金: %.2f' % end_value)
+        profit_ratio = '{:.2f}%'.format((int(end_value) - start_value) / start_value * 100)
+        print('投资收益率: {}\n\n\n'.format(profit_ratio))
+        stock_profit_ratios[i] = profit_ratio
+
+    print(stock_profit_ratios)
+    return stock_profit_ratios
+
+        # 可视化回测结果
+        # cerebro.plot()

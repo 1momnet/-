@@ -1,16 +1,16 @@
 from tkinter import *
-from A1条件管理 import *
-from A2股票选取 import *
-from A3数据本地化saver import *
-from A4量化择时策略 import *
-from B2在险价值类 import *
-
+from A6量化主程序 import *
 
 class Application2(Frame):
     def __init__(self, master=None):
         super().__init__(master)
         self.master =  master
         self.pack()
+
+        self.index = '399300.SZ'
+        self.s_strategy = '三因子'
+        self.q_strategy = '布林线'
+
         self.create_widget()
 
     def create_widget(self):
@@ -19,11 +19,15 @@ class Application2(Frame):
         self.Label_index = Label(self, text='指数')
         self.Label_index.grid(row=0, column=0) # 第一行第一列，pack()按照行数，一行一个
         user_input1 = StringVar()
-        self.entry_index = Entry(self, textvariable=user_input1) # entry1：指数
-        self.entry_index.grid(row=0, column=1)
-        # 确定是否一致
-        print(user_input1.get())
-        print(self.entry_index.get())
+        self.list_box_index = Listbox(self, listvariable=user_input1, height=1)
+        self.list_box_index.insert('1', '399300.SZ')
+        self.list_box_index.grid(row=0, column=1)
+        def i_on_select(event):
+            selected_tuple = self.list_box_index.curselection()
+            if selected_tuple:
+                self.index = self.list_box_index.get(selected_tuple[0])
+                print(self.index)
+        self.list_box_index.bind('<<ListboxSelect>>', i_on_select)
 
         # 2.创建日期栏目
         self.Label_date1 = Label(self, text='选股开始日期')
@@ -42,16 +46,30 @@ class Application2(Frame):
         self.Label_s_strategy = Label(self, text='选股策略')
         self.Label_s_strategy.grid(row=2, column=0)
 
-        user_input4 = StringVar()
-        self.entry_s_startegy = Entry(self, textvariable=user_input4)
-        self.entry_s_startegy.grid(row=2, column=1) # entry4：选股策略
+        self.s_Strategy_Listbox = Listbox(self, listvariable=StringVar(), height=1)
+        self.s_Strategy_Listbox.insert('1', '三因子')
+        self.s_Strategy_Listbox.grid(row=2, column=1)
+        def s_strategy_on_select(event):
+            selected_tuple = self.s_Strategy_Listbox.curselection()
+            if selected_tuple:
+                self.s_strategy = self.s_Strategy_Listbox.get(selected_tuple[0])
+                print(self.s_strategy)
+        self.s_Strategy_Listbox.bind('<<ListboxSelect>>', s_strategy_on_select)
 
         self.Label_q_strategy = Label(self, text='择时策略')
         self.Label_q_strategy.grid(row=2, column=2)
 
-        user_input5 = StringVar()
-        self.entry_q_startegy = Entry(self, textvariable=user_input5)
-        self.entry_q_startegy.grid(row=2, column=3) # entry5：择时策略
+        self.q_Strategy_Listbox = Listbox(self, listvariable=StringVar(), height=1)
+        self.q_Strategy_Listbox.insert('1', '布林线')
+        self.q_Strategy_Listbox.grid(row=2, column=3)
+
+        def q_strategy_on_select(event):
+            selected_tuple = self.q_Strategy_Listbox.curselection()
+            if selected_tuple:
+                self.q_strategy = self.q_Strategy_Listbox.get(selected_tuple[0])
+                print(self.q_strategy)
+
+        self.q_Strategy_Listbox.bind('<<ListboxSelect>>', q_strategy_on_select)
 
         # 5.创建回测时间栏目
         self.Label_q_date = Label(self, text='回测开始日期')
@@ -76,39 +94,33 @@ class Application2(Frame):
         self.Label_result2 = Label(self, text='回测结果')
         self.Label_result2.grid(row=5, column=1)
 
+
+
     # 5.为确定按钮创建一个点击事件login
     def event_confirm(self):
         start_date = self.entry_star_date.get()
         end_date = self.entry_end_date.get()
-        index = self.entry_index.get()
-        s_strategy = self.entry_s_startegy.get()
-        q_strategy = self.entry_q_startegy.get()
+        index = self.index
+        s_strategy = self.s_strategy
+        q_strategy = self.q_strategy
         trade_back_start_date = self.entry_q_star_date.get()
         trade_back_end_date = self.entry_q_end_date.get()
 
-        Sa1 = Saver()
-        A1 = ConditionArrangement(start_date=start_date, end_date=end_date, index=index, s_strategy=s_strategy,
-                                  q_strategy=q_strategy, Sa1=Sa1)
+        stock_profit_ratios = main_procedure(start_date=start_date, end_date=end_date,
+                                             index=index, s_strategy=s_strategy, q_strategy=q_strategy,
+                                             trade_back_start_date=trade_back_start_date, trade_back_end_date=trade_back_end_date)
 
-        S1 = StockChoice(index=A1.index, trade_date=A1.trade_date, s_strategy=A1.s_strategy, q_strategy=A1.q_strategy, A1=A1, Sa1=Sa1)
-        ts_list = S1.ts_list
-        A1.into_daily_basic(ts_list=ts_list)
-        S1.s_strategy_choice()
+        self.Text_result3 = Text(self, borderwidth=1, relief='solid', height=15, width=10)
+        txt1 = '\n'.join(map(str, stock_profit_ratios.keys()))
+        self.Text_result3.insert('1.0', txt1)
+        self.Text_result3.config(state='disabled')
+        self.Text_result3.grid(row=6, column=0)
 
-        # 在险价值部分
-        var_instance = Var(S1.top_stocks)
-        var_instance.historical_simulation()
-
-        # 回测部分
-        Qd1 = QuantifyData()
-        q_strategy = q_strategy_choice(q_strategy=A1.q_strategy)
-        stock_profit_ratios = main_backtrade(S1.top_stocks, q_strategy=q_strategy, qd_object=Qd1, trade_back_start_date=trade_back_start_date, tb_end_date=trade_back_end_date)
-
-        self.Label_result3 = Label(self, text='\n'.join(map(str, stock_profit_ratios.keys())), borderwidth=1, relief='solid')
-        self.Label_result3.grid(row=6, column=0)
-
-        self.Label_result4 = Label(self, text='\n'.join(map(str, stock_profit_ratios.values())), borderwidth=1, relief='solid')
-        self.Label_result4.grid(row=6, column=1)
+        self.Text_result4 = Text(self, borderwidth=1, relief='solid', height=15, width=10)
+        txt2 = '\n'.join(map(str, stock_profit_ratios.values()))
+        self.Text_result4.insert('1.0', txt2)
+        self.Text_result4.config(state='disabled')
+        self.Text_result4.grid(row=6, column=1)
 
 
 if __name__ == '__main__':
