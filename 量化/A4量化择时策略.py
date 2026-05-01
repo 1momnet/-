@@ -12,10 +12,11 @@ class BollStrategy(bt.Strategy):
         print('%s, %s' % (dt.isoformat(), txt))
 
     def __init__(self):
+        super().__init__()
         self.dataclose = self.datas[0].close
         self.order = None
-        self.lines.top = bt.indicators.BollingerBands(self.datas[0], period=20).top
-        self.lines.bot = bt.indicators.BollingerBands(self.datas[0], period=20).bot
+        self.lines.top = bt.indicators.BollingerBands(self.dataclose, period=20).top
+        self.lines.bot = bt.indicators.BollingerBands(self.dataclose, period=20).bot
 
     def notify_order(self, order):
         if order.status in [order.Submitted, order.Accepted]:  # 如订单已被处理，则不用做任何事情
@@ -88,32 +89,69 @@ def main_backtrade(top_stocks, qd_object, q_strategy, trade_back_start_date, tb_
         stock = i
         # today = datetime.now().strftime('%Y%m%d')
         # end_date_f = today
-
+        
         # 实例化
         df = qd_object.acquire_data(stock, start_date=trade_back_start_date, end_date=tb_end_date)
-        # 实例化 cerebro
+
+        # 实例化 cerebro——引擎
         cerebro = bt.Cerebro()
+
         # 添加数据进cerebro
         data = bt.feeds.PandasData(dataname=df)
         cerebro.adddata(data)
+
         # 设置本金与佣金
         cerebro.broker.setcash(100000)
-        cerebro.broker.setcommission(commission=0.0005)
-        # 添加交易策略
+        cerebro.broker.setcommission(commission=0.001)
+
+        # 添加交易策略——cerebro行动逻辑
         print(i)
         cerebro.addstrategy(q_strategy)
+
+        # 添加分析器
+        cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
+        cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
+        cerebro.addanalyzer(bt.analyzers.Returns, _name='returns')
+        cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
+        cerebro.addanalyzer(bt.analyzers.AnnualReturn, _name='annual_return')
+
+        # 添加观察器
         cerebro.addobserver(bt.observers.DrawDown)
-        start_value = cerebro.broker.getvalue()
-        print('初始资金: {:.2f}'.format(start_value))
-        cerebro.run()
-        end_value = cerebro.broker.getvalue()
-        print('最终资金: %.2f' % end_value)
-        profit_ratio = '{:.2f}%'.format((int(end_value) - start_value) / start_value * 100)
-        print('投资收益率: {}\n\n\n'.format(profit_ratio))
+        cerebro.addobserver(bt.observers.TimeReturn)
+
+        # 运行
+        results = cerebro.run()
+        strat = results[0]
+
+        # 打印结果
+        print('*' * 54)
+        print(f'{'结果分析':-^50}')
+        print('*' * 54)
+        # 打印结果
+        returns = strat.analyzers.returns.get_analysis()
+        sharpe = strat.analyzers.sharpe.get_analysis()
+        drawdown = strat.analyzers.drawdown.get_analysis()
+        trades = strat.analyzers.trades.get_analysis()
+        annual_return = strat.analyzers.annual_return.get_analysis()
+
+        print(f'初始资金: {cerebro.broker.startingcash:.2f}')
+        print(f'最终资金: {cerebro.broker.getvalue():.2f}')
+        print(f'收益率: {returns['rtot']:.2%}')
+        print(f'平均收益率: {returns['ravg']:.2%}')
+        print(f'夏普比率: {sharpe['sharperatio']:.3f}')
+        print(f'最大回撤: {drawdown["max"]["drawdown"]:.2%}')
+        print(f'最大回撤持续: {drawdown["max"]["len"]} 天')
+        print(f'总交易次数: {trades["total"]["total"]}')
+        if trades["total"]["total"] > 0:
+            print(f'胜率: {trades["won"]["total"] / trades["total"]["total"]:.2%}')
+
+        print(f'年化收益: {annual_return.get("rnorm", 0):.2%}')
+
+        profit_ratio = round(returns["rtot"] * 100, 2)
         stock_profit_ratios[i] = profit_ratio
 
+        # 可视化回测结果
+        cerebro.plot()
     print(stock_profit_ratios)
     return stock_profit_ratios
 
-        # 可视化回测结果
-        # cerebro.plot()
